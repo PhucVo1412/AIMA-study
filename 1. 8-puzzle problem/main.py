@@ -131,7 +131,7 @@ class AstarSearch(SearchingStrategy):
     def __init__(self):
         pass
 
-    def heuristic(self, state, goal):
+    def heuristic_Manhattan(self, state, goal):
         # Manhattan distance
         total = 0
         for i in range(3):
@@ -143,9 +143,68 @@ class AstarSearch(SearchingStrategy):
                             if goal[x][y] == val:
                                 total += abs(x - i) + abs(y - j)
         return total
+    
+    def heuristic_Nilson(self, state, goal):
+        def manhattan():
+            return self.heuristic_Manhattan(state, goal)
+
+        seq_score = 0
+        spiral_order = [(0,0),(0,1),(0,2),(1,2),(2,2),(2,1),(2,0),(1,0)]
+        spiral_vals = [state[i][j] for i, j in spiral_order]
+        for idx in range(len(spiral_vals) - 1):
+            if (spiral_vals[idx] + 1) % 8 != spiral_vals[idx + 1] % 8:
+                seq_score += 2
+        if state[1][1] != 0:
+            seq_score += 1
+        return manhattan() + seq_score
+
+    def heuristic_LinearConflict(self, state, goal):
+        def manhattan():
+            return self.heuristic_Manhattan(state, goal)
+
+        def find_conflicts(line, goal_line):
+            conflict = 0
+            for i in range(len(line)):
+                for j in range(i + 1, len(line)):
+                    if line[i] in goal_line and line[j] in goal_line:
+                        if goal_line.index(line[i]) > goal_line.index(line[j]):
+                            conflict += 1
+            return conflict
+
+        linear_conflict = 0
+        for i in range(3):
+            row = state[i]
+            goal_row = [goal[i][j] for j in range(3)]
+            linear_conflict += find_conflicts(row, goal_row)
+
+            col = [state[j][i] for j in range(3)]
+            goal_col = [goal[j][i] for j in range(3)]
+            linear_conflict += find_conflicts(col, goal_col)
+        return manhattan() + 2 * linear_conflict
+
+    def heuristic_PatternDB(self, state, goal):
+        # Simulate with Manhattan distance over two subsets
+        subset1 = {1, 2, 3, 4}
+        subset2 = {5, 6, 7, 8}
+        dist1 = 0
+        dist2 = 0
+        goal_pos = {val: (i, j) for i in range(3) for j in range(3) if goal[i][j] != 0 for val in [goal[i][j]]}
+        for i in range(3):
+            for j in range(3):
+                val = state[i][j]
+                if val in goal_pos:
+                    goal_i, goal_j = goal_pos[val]
+                    if val in subset1:
+                        dist1 += abs(i - goal_i) + abs(j - goal_j)
+                    elif val in subset2:
+                        dist2 += abs(i - goal_i) + abs(j - goal_j)
+        return dist1 + dist2
+    
+    def heuristic_PatternDB(self, state, goal):
+        return 0
 
     def search(self, init_state, goal_state):
-        root = Node(init_state, None, None, self.heuristic(init_state, goal_state), 0)
+        root = Node(init_state, None, None, self.heuristic_Manhattan(init_state, goal_state), 0)
         frontier = []
         heapq.heappush(frontier, root)
         visited = set()
@@ -158,7 +217,7 @@ class AstarSearch(SearchingStrategy):
 
             for action, new_state in State(node.state).successors():
                 if str(new_state) not in visited:
-                    cost = self.heuristic(new_state, goal_state)
+                    cost = self.heuristic_Manhattan(new_state, goal_state)
                     child = Node(new_state, node, action, cost, node.depth + 1)
                     heapq.heappush(frontier, child)
         return None
